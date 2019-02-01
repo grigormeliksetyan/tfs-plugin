@@ -9,14 +9,15 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.conn.HttpHostConnectException;
 import org.apache.http.impl.client.HttpClientBuilder;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -53,7 +54,7 @@ public final class JenkinsEventNotifier {
                 final JobCompletionEventArgs args = new JobCompletionEventArgs(
                         connectionParameters.getConnectionKey(),
                         jsonPayload,
-                        getPayloadSignature(connectionParameters, jsonPayload));
+                        getPayloadSignature(connectionParameters.getConnectionSignature(), jsonPayload));
                 client.sendJobCompletionEvent(args);
             } catch (final Exception e) {
                 log.warning("ERROR: sendJobCompletionEvent: (collection=" + c.getCollectionUrl() + ") " + e.getMessage());
@@ -81,22 +82,47 @@ public final class JenkinsEventNotifier {
             request.addHeader("User-Agent", "Jenkins-Self");
 
             final HttpResponse response = client.execute(request);
+            final int statusCode = response.getStatusLine().getStatusCode();
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(response.getEntity().getContent(), ENCODING))) {
-
-                final StringBuilder result = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    result.append(line);
-                    result.append("\n");
+            if (statusCode <= HttpURLConnection.HTTP_ACCEPTED) {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(response.getEntity().getContent(), ENCODING))) {
+                    final StringBuilder result = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        result.append(line);
+                        result.append("\n");
+                    }
+                    return result.toString();
                 }
-                return result.toString();
+            } else {
+                log.warning("ERROR: getApiJson: (url=" + url + ") failed due to Http error #" + statusCode);
+                return null;
             }
-        } catch (final IOException e) {
+        } catch (final HttpHostConnectException e) {
+            log.warning("ERROR: getApiJson: (url=" + url + ") " + e.getMessage());
+            return null;
+        } catch (final Exception e) {
             log.warning("ERROR: getApiJson: (url=" + url + ") " + e.getMessage());
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Calculates the payload hash.
+     * @param secret
+     * @param payload
+     * @return
+     * @throws NoSuchAlgorithmException
+     * @throws InvalidKeyException
+     * @throws UnsupportedEncodingException
+     */
+    public static String getPayloadSignature(final String secret, final String payload)
+            throws NoSuchAlgorithmException, InvalidKeyException, UnsupportedEncodingException {
+        final SecretKeySpec signingKey = new SecretKeySpec(secret.getBytes(ENCODING), "HmacSHA1");
+        final Mac mac = Mac.getInstance("HmacSHA1");
+        mac.init(signingKey);
+        return toHexString(mac.doFinal(payload.getBytes(ENCODING)));
     }
 
     private static String urlCombine(final String url, final String... parts) {
@@ -115,15 +141,6 @@ public final class JenkinsEventNotifier {
         return sb.toString();
     }
 
-    private static String getPayloadSignature(final ConnectionParameters connectionParameters, final String payload)
-            throws NoSuchAlgorithmException, InvalidKeyException, UnsupportedEncodingException {
-        final String key = connectionParameters.getConnectionSignature();
-        final SecretKeySpec signingKey = new SecretKeySpec(key.getBytes(ENCODING), "HmacSHA1");
-        final Mac mac = Mac.getInstance("HmacSHA1");
-        mac.init(signingKey);
-        return toHexString(mac.doFinal(payload.getBytes(ENCODING)));
-    }
-
     private static String toHexString(final byte[] bytes) {
         final Formatter formatter = new Formatter();
         for (final byte b : bytes) {
@@ -132,6 +149,4 @@ public final class JenkinsEventNotifier {
 
         return formatter.toString();
     }
-
-
 }

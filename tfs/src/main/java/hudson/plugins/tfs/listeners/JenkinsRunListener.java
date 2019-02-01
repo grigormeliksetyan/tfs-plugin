@@ -1,19 +1,20 @@
 package hudson.plugins.tfs.listeners;
 
 import hudson.Extension;
-import hudson.model.Cause;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.model.listeners.RunListener;
-import hudson.plugins.tfs.JenkinsEventNotifier;
-import net.sf.json.JSONObject;
+
+import hudson.plugins.tfs.TeamCompletedStatusPostBuildAction;
+import hudson.plugins.tfs.TeamPendingStatusBuildStep;
+import hudson.plugins.tfs.UnsupportedIntegrationAction;
 
 import javax.annotation.Nonnull;
 import java.util.logging.Logger;
 
+
 /**
  * This class listens to the events of every Jenkins run instance.
- * Completed runs fire an event back to the JenkinsEventNotifier.
  */
 @Extension
 public class JenkinsRunListener extends RunListener<Run> {
@@ -29,6 +30,10 @@ public class JenkinsRunListener extends RunListener<Run> {
 
     @Override
     public void onStarted(final Run run, final TaskListener listener) {
+        if (UnsupportedIntegrationAction.isSupported(run, listener)) {
+            final TeamPendingStatusBuildStep step = new TeamPendingStatusBuildStep();
+            step.perform(run, listener);
+        }
     }
 
     @Override
@@ -38,20 +43,9 @@ public class JenkinsRunListener extends RunListener<Run> {
     @Override
     public void onCompleted(final Run run, @Nonnull final TaskListener listener) {
         log.info("onCompleted: " + run.toString());
-        final String payload = JenkinsEventNotifier.getApiJson(run.getUrl());
-        final JSONObject json = JSONObject.fromObject(payload);
-        json.put("name", run.getParent().getDisplayName());
-        json.put("startedBy", getStartedBy(run));
-
-        JenkinsEventNotifier.sendJobCompletionEvent(json);
-    }
-
-    private String getStartedBy(final Run run) {
-        final Cause.UserIdCause cause = (Cause.UserIdCause) run.getCause(Cause.UserIdCause.class);
-        String startedBy = "";
-        if (cause != null && cause.getUserId() != null) {
-            startedBy = cause.getUserId();
+        if (UnsupportedIntegrationAction.isSupported(run, listener)) {
+            final TeamCompletedStatusPostBuildAction step = new TeamCompletedStatusPostBuildAction();
+            step.perform(run, listener);
         }
-        return startedBy;
     }
 }

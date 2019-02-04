@@ -15,15 +15,16 @@ public class WorkspaceConfigurationTest {
     @Test public void assertConfigurationsEquals() {
         final List<String> cloakList = Collections.singletonList("cloak");
 
-        WorkspaceConfiguration one = new WorkspaceConfiguration("server", "workspace", "project", cloakList, "workfolder");
-        WorkspaceConfiguration two = new WorkspaceConfiguration("server", "workspace", "project", cloakList, "workfolder");
+        ProjectData[] projects = new ProjectData[0];
+        WorkspaceConfiguration one = new WorkspaceConfiguration("server", "workspace", ProjectData.getProjects("project", "workfolder", projects), cloakList);
+        WorkspaceConfiguration two = new WorkspaceConfiguration("server", "workspace", ProjectData.getProjects("project", "workfolder", projects), cloakList);
         assertThat(one, is(two));
         assertThat(two, is(one));
         assertThat(one, is(one));
-        assertThat(one, not(new WorkspaceConfiguration("aserver", "workspace", "project", cloakList, "workfolder")));
-        assertThat(one, not(new WorkspaceConfiguration("server", "aworkspace", "project", cloakList, "workfolder")));
-        assertThat(one, not(new WorkspaceConfiguration("server", "workspace", "aproject", cloakList, "workfolder")));
-        assertThat(one, not(new WorkspaceConfiguration("server", "workspace", "project", cloakList, "aworkfolder")));
-        assertThat(one, not(new WorkspaceConfiguration("server", "workspace", "project", EMPTY_CLOAKED_PATHS_LIST, "workfolder")));
+        assertThat(one, not(new WorkspaceConfiguration("aserver", "workspace", ProjectData.getProjects("project", "workfolder", projects), cloakList)));
+        assertThat(one, not(new WorkspaceConfiguration("server", "aworkspace", ProjectData.getProjects("project", "workfolder", projects), cloakList)));
+        assertThat(one, not(new WorkspaceConfiguration("server", "workspace", ProjectData.getProjects("aproject", "workfolder", projects), cloakList)));
+        assertThat(one, not(new WorkspaceConfiguration("server", "workspace", ProjectData.getProjects("project", "aworkfolder", projects), cloakList)));
+        assertThat(one, not(new WorkspaceConfiguration("server", "workspace", ProjectData.getProjects("project", "workfolder", projects), EMPTY_CLOAKED_PATHS_LIST)));
     }
 }

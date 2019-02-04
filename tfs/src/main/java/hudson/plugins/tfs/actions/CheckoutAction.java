@@ -6,11 +6,7 @@ import com.microsoft.tfs.core.clients.versioncontrol.specs.version.VersionSpec;
 import hudson.FilePath;
 import hudson.model.TaskListener;
 import hudson.plugins.tfs.commands.RemoteChangesetVersionCommand;
-import hudson.plugins.tfs.model.ChangeSet;
-import hudson.plugins.tfs.model.Project;
-import hudson.plugins.tfs.model.Server;
-import hudson.plugins.tfs.model.Workspace;
-import hudson.plugins.tfs.model.Workspaces;
+import hudson.plugins.tfs.model.*;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -24,17 +20,15 @@ import java.util.List;
 public class CheckoutAction {
 
     private final String workspaceName;
-    private final String projectPath;
+    private final ProjectData projects[];
     private final Collection<String> cloakedPaths;
-    private final String localFolder;
     private final boolean useUpdate;
     private final boolean useOverwrite;
 
-    public CheckoutAction(String workspaceName, String projectPath, Collection<String> cloakedPaths, String localFolder, boolean useUpdate, boolean useOverwrite) {
+    public CheckoutAction(String workspaceName, ProjectData projects[], Collection<String> cloakedPaths, boolean useUpdate, boolean useOverwrite) {
         this.workspaceName = workspaceName;
-        this.projectPath = projectPath;
+        this.projects = projects;
         this.cloakedPaths = cloakedPaths;
-        this.localFolder = localFolder;
         this.useUpdate = useUpdate;
         this.useOverwrite = useOverwrite;
     }
@@ -56,10 +50,12 @@ public class CheckoutAction {
 
     public List<ChangeSet> checkout(final Server server, final FilePath workspacePath, final VersionSpec lastBuildVersionSpec, final VersionSpec currentBuildVersionSpec) throws IOException, InterruptedException {
 
-        Project project = getProject(server, workspacePath);
+        Project project = this.getProject(server, workspacePath, projects[0].getProjectPath(), projects[0].getLocalPath());
 
         final String versionSpecString = RemoteChangesetVersionCommand.toString(currentBuildVersionSpec);
-        final String normalizedFolder = determineCheckoutPath(workspacePath, localFolder);
+
+        final String normalizedFolder = determineCheckoutPath(workspacePath, projects[0].getLocalPath());
+
         project.getFiles(normalizedFolder, versionSpecString, useOverwrite);
 
         if (lastBuildVersionSpec != null) {
@@ -70,8 +66,8 @@ public class CheckoutAction {
     }
 
     public List<ChangeSet> checkoutBySingleVersionSpec(Server server, FilePath workspacePath, String singleVersionSpec) throws IOException, InterruptedException {
-        Project project = getProject(server, workspacePath);
-        final String normalizedFolder = determineCheckoutPath(workspacePath, localFolder);
+        Project project = this.getProject(server, workspacePath, projects[0].getProjectPath(), projects[0].getLocalPath());
+        final String normalizedFolder = determineCheckoutPath(workspacePath, projects[0].getLocalPath());
         project.getFiles(normalizedFolder, singleVersionSpec, useOverwrite);
 
         return project.getDetailedHistory(singleVersionSpec);
@@ -83,7 +79,7 @@ public class CheckoutAction {
         return result;
     }
 
-    private Project getProject(final Server server, final FilePath workspacePath)
+    private Project getProject(final Server server, final FilePath workspacePath, String projectPath, String localFolder)
             throws IOException, InterruptedException {
         final Workspaces workspaces = server.getWorkspaces();
         final Project project = server.getProject(projectPath);
@@ -93,9 +89,22 @@ public class CheckoutAction {
         final PrintStream logger = listener.getLogger();
 
         final HashSet<String> workspaceNamesToDelete = new HashSet<String>();
-        final String existingWorkspaceName = workspaces.getWorkspaceMapping(localPath);
+        List<String> existingWorkspaceNames = new ArrayList<String>();
+        String existingWorkspaceName = null;
+        for (int ndx = 0; ndx < projects.length; ++ndx) {
+            String tempWorkspaceName = workspaces.getWorkspaceMapping(workspacePath.child(projects[ndx].getLocalPath()).getRemote());
+            existingWorkspaceNames.add(tempWorkspaceName);
+            if (tempWorkspaceName != null){
+                existingWorkspaceName = tempWorkspaceName;
+            }
+        }
+//        final String existingWorkspaceName = workspaces.getWorkspaceMapping(localPath);
+        if (existingWorkspaceNames.contains(null)){
+            existingWorkspaceName = null;
+        }
         if (workspaces.exists(workspaceName)) {
             if (!useUpdate) {
+                logger.println("Info: Since Use update is not checked - the workspace will be deleted.");
                 workspaceNamesToDelete.add(workspaceName);
             }
             if (existingWorkspaceName == null) {
@@ -103,6 +112,7 @@ public class CheckoutAction {
                 workspaceNamesToDelete.add(workspaceName);
             }
             else if (existingWorkspaceName.equalsIgnoreCase(workspaceName)) {
+                logger.println("Info: Workspace exists and \"localPath\" is mapped there: everything is fine.");
                 // workspace exists and "localPath" is mapped there: everything is fine.
             }
             else {
@@ -141,7 +151,7 @@ public class CheckoutAction {
                 localFolderPath.deleteContents();
             }
             final String serverPath = project.getProjectPath();
-            workspace = workspaces.newWorkspace(workspaceName, serverPath, cloakedPaths, localPath);
+            workspace = workspaces.newWorkspace(workspaceName, projects, cloakedPaths);
         } else {
             workspace = workspaces.getWorkspace(workspaceName);
         }

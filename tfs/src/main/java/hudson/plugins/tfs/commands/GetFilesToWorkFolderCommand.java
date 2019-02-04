@@ -28,7 +28,7 @@ public class GetFilesToWorkFolderCommand extends AbstractCallableCommand<Void, E
     private int getCount = 0;
 
     public GetFilesToWorkFolderCommand(final ServerConfigurationProvider server, final String workFolder, final String versionSpec, boolean useOverwrite) {
-        this(server, workFolder, versionSpec, useOverwrite, false);
+        this(server, workFolder, versionSpec, useOverwrite, true);
         // using shouldLogEachGet false as default, could be controlled by a config option at a later stage if desired, just adds noise to log though
     }
 

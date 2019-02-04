@@ -4,6 +4,7 @@ import com.microsoft.tfs.core.TFSTeamProjectCollection;
 import com.microsoft.tfs.core.clients.versioncontrol.WorkspaceLocation;
 import com.microsoft.tfs.core.clients.versioncontrol.WorkspaceOptions;
 import com.microsoft.tfs.core.clients.versioncontrol.soapextensions.WorkingFolder;
+import hudson.plugins.tfs.model.ProjectData;
 import hudson.plugins.tfs.model.Server;
 import hudson.remoting.Callable;
 import org.junit.Test;
@@ -20,6 +21,8 @@ public class NewWorkspaceCommandTest extends AbstractCallableCommandTest {
     private static final List<String> EMPTY_CLOAKED_PATHS = Collections.emptyList();
 
     @Test public void assertLogging() throws Exception {
+        ProjectData[] projects = new ProjectData[0];
+        projects = ProjectData.getProjects(null, null, projects);
         when(server.getUserName()).thenReturn("snd\\user_cp");
         when(vcc.createWorkspace(aryEq((WorkingFolder[]) null),
                 isA(String.class),
@@ -28,7 +31,7 @@ public class NewWorkspaceCommandTest extends AbstractCallableCommandTest {
                 isA(String.class),
                 isA(WorkspaceLocation.class),
                 isA(WorkspaceOptions.class))).thenReturn(null);
-        final NewWorkspaceCommand command = new NewWorkspaceCommand(server, "TheWorkspaceName", null, EMPTY_CLOAKED_PATHS, null) {
+        final NewWorkspaceCommand command = new NewWorkspaceCommand(server, "TheWorkspaceName", projects, EMPTY_CLOAKED_PATHS) {
             @Override
             public Server createServer() {
                 return server;
@@ -51,7 +54,8 @@ public class NewWorkspaceCommandTest extends AbstractCallableCommandTest {
 
     @Test public void assertLoggingWhenAlsoMapping() throws Exception {
         final List<String> cloakedPaths = Collections.singletonList("$/Stuff/Hide");
-
+        ProjectData[] projects = new ProjectData[0];
+        projects = ProjectData.getProjects("$/Stuff", "/home/jenkins/jobs/stuff/workspace", projects);
         when(server.getUserName()).thenReturn("snd\\user_cp");
         when(vcc.createWorkspace(aryEq((WorkingFolder[]) null),
                 isA(String.class),
@@ -60,7 +64,7 @@ public class NewWorkspaceCommandTest extends AbstractCallableCommandTest {
                 isA(String.class),
                 isA(WorkspaceLocation.class),
                 isA(WorkspaceOptions.class))).thenReturn(null);
-        final NewWorkspaceCommand command = new NewWorkspaceCommand(server, "TheWorkspaceName", "$/Stuff", cloakedPaths, "/home/jenkins/jobs/stuff/workspace") {
+        final NewWorkspaceCommand command = new NewWorkspaceCommand(server, "TheWorkspaceName", projects, cloakedPaths) {
             @Override
             public Server createServer() {
                 return server;
@@ -84,6 +88,8 @@ public class NewWorkspaceCommandTest extends AbstractCallableCommandTest {
     }
 
     @Override protected AbstractCallableCommand createCommand(final ServerConfigurationProvider serverConfig) {
-        return new NewWorkspaceCommand(serverConfig, "workspaceName", "$/serverPath", EMPTY_CLOAKED_PATHS, "local/path");
-    }
+        ProjectData[] projects = new ProjectData[0];
+        projects = ProjectData.getProjects("$/serverPath", "local/path", projects);
+
+        return new NewWorkspaceCommand(serverConfig, "workspaceName", projects, EMPTY_CLOAKED_PATHS);    }
 }

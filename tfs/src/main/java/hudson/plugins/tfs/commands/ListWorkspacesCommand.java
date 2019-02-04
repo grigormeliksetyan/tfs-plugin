@@ -31,7 +31,7 @@ public class ListWorkspacesCommand extends AbstractCallableCommand<List<Workspac
     
     public ListWorkspacesCommand(final ServerConfigurationProvider server) {
         // TODO: shouldLogWorkspaces could be controlled by a property
-        this(server, null, false);
+        this(server, null, true);
     }
 
     ListWorkspacesCommand(final ServerConfigurationProvider server, final String computer, final boolean shouldLogWorkspaces) {

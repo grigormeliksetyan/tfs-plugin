@@ -11,6 +11,7 @@ import com.microsoft.tfs.core.clients.versioncontrol.soapextensions.WorkingFolde
 import com.microsoft.tfs.core.clients.versioncontrol.soapextensions.WorkingFolderType;
 import hudson.model.TaskListener;
 import hudson.plugins.tfs.model.MockableVersionControlClient;
+import hudson.plugins.tfs.model.ProjectData;
 import hudson.plugins.tfs.model.Server;
 import hudson.remoting.Callable;
 
@@ -30,16 +31,14 @@ public class NewWorkspaceCommand extends AbstractCallableCommand<Void, Exception
     private static final String MappingTemplate = "Mapping '%s' to local folder '%s' in workspace '%s'...";
 
     private final String workspaceName;
-    private final String serverPath;
     private final Collection<String> cloakedPaths;
-    private final String localPath;
+    private final ProjectData projects[];
 
-    public NewWorkspaceCommand(final ServerConfigurationProvider server, final String workspaceName, final String serverPath, Collection<String> cloakedPaths, final String localPath) {
+    public NewWorkspaceCommand(final ServerConfigurationProvider server, final String workspaceName, final ProjectData projects[], Collection<String> cloakedPaths) {
         super(server);
         this.workspaceName = workspaceName;
-        this.serverPath = serverPath;
+        this.projects = projects;
         this.cloakedPaths = cloakedPaths;
-        this.localPath = localPath;
     }
 
     public Callable<Void, Exception> getCallable() {
@@ -56,17 +55,17 @@ public class NewWorkspaceCommand extends AbstractCallableCommand<Void, Exception
 
         final String creatingMessage = String.format(CreatingTemplate, workspaceName, userName);
         logger.println(creatingMessage);
-        
-        WorkingFolder[] foldersToMap = null;
-        if (serverPath != null && localPath != null) {
-            final String mappingMessage = String.format(MappingTemplate, serverPath, localPath, workspaceName);
-            logger.println(mappingMessage);
 
+        WorkingFolder[] foldersToMap = null;
+        if (projects[0].getProjectPath() != null && projects[0].getLocalPath() != null) {
             final List<WorkingFolder> folderList = new ArrayList<WorkingFolder>();
 
-            folderList.add(new WorkingFolder(serverPath, LocalPath.canonicalize(localPath), WorkingFolderType.MAP, RecursionType.FULL));
+            for (int ndx = 0; ndx < projects.length; ++ndx) {
+                final String mappingMessage = String.format(MappingTemplate, projects[ndx].getProjectPath(), projects[ndx].getLocalPath(), workspaceName);
+                logger.println(mappingMessage);
 
-
+                folderList.add(new WorkingFolder(projects[ndx].getProjectPath(), LocalPath.canonicalize(projects[ndx].getLocalPath()), WorkingFolderType.MAP, RecursionType.FULL));
+            }
             for (final String cloakedPath : cloakedPaths) {
                 final String cloakingMessage = String.format(CloakingTemplate, cloakedPath, workspaceName);
                 logger.println(cloakingMessage);

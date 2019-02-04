@@ -1,31 +1,29 @@
 //CHECKSTYLE:OFF
 package hudson.plugins.tfs.model;
 
+import hudson.model.InvisibleAction;
+
 import java.io.Serializable;
 import java.util.Collection;
 
-import hudson.model.InvisibleAction;
-
 /**
- * An action for storing TFS configuration data in a build 
- * 
+ * An action for storing TFS configuration data in a build
+ *
  * @author Erik Ramfelt, redsolo
  */
 public class WorkspaceConfiguration extends InvisibleAction implements Serializable {
 
     private static final long serialVersionUID = 1L;
-    
+
     private final String workspaceName;
-    private final String workfolder;
-    private final String projectPath;
+    private final ProjectData projects[];
     private final String serverUrl;
     private boolean workspaceExists;
     private Collection<String> cloakedPaths;
 
-    public WorkspaceConfiguration(String serverUrl, String workspaceName, String projectPath, Collection<String> cloakedPaths, String workfolder) {
+    public WorkspaceConfiguration(String serverUrl, String workspaceName, ProjectData projects[], Collection<String> cloakedPaths) {
         this.workspaceName = workspaceName;
-        this.workfolder = workfolder;
-        this.projectPath = projectPath;
+        this.projects = projects;
         this.serverUrl = serverUrl;
         this.workspaceExists = true;
         this.cloakedPaths = cloakedPaths;
@@ -33,8 +31,7 @@ public class WorkspaceConfiguration extends InvisibleAction implements Serializa
 
     public WorkspaceConfiguration(WorkspaceConfiguration configuration) {
         this.workspaceName = configuration.workspaceName;
-        this.workfolder = configuration.workfolder;
-        this.projectPath = configuration.projectPath;
+        this.projects = configuration.projects;
         this.serverUrl = configuration.serverUrl;
         this.workspaceExists = configuration.workspaceExists;
         this.cloakedPaths = configuration.cloakedPaths;
@@ -44,22 +41,18 @@ public class WorkspaceConfiguration extends InvisibleAction implements Serializa
         return workspaceName;
     }
 
-    public String getWorkfolder() {
-        return workfolder;
-    }
-
-    public String getProjectPath() {
-        return projectPath;
+    public ProjectData[] getProjects() {
+        return projects;
     }
 
     public String getServerUrl() {
         return serverUrl;
     }
-    
+
     public boolean workspaceExists() {
         return workspaceExists;
     }
-    
+
     public void setWorkspaceWasRemoved() {
         this.workspaceExists = false;
     }
@@ -72,9 +65,8 @@ public class WorkspaceConfiguration extends InvisibleAction implements Serializa
     public int hashCode() {
         final int prime = 31;
         int result = 1;
-        result = prime * result + ((projectPath == null) ? 0 : projectPath.hashCode());
+        result = prime * result + ((projects == null) ? 0 : projects.hashCode());
         result = prime * result + ((serverUrl == null) ? 0 : serverUrl.hashCode());
-        result = prime * result + ((workfolder == null) ? 0 : workfolder.hashCode());
         result = prime * result + (workspaceExists ? 1231 : 1237);
         result = prime * result + ((workspaceName == null) ? 0 : workspaceName.hashCode());
         result = prime * result + ((cloakedPaths == null) ? 0 : cloakedPaths.hashCode());
@@ -90,20 +82,10 @@ public class WorkspaceConfiguration extends InvisibleAction implements Serializa
         if (!(obj instanceof WorkspaceConfiguration))
             return false;
         WorkspaceConfiguration other = (WorkspaceConfiguration) obj;
-        if (projectPath == null) {
-            if (other.projectPath != null)
-                return false;
-        } else if (!projectPath.equals(other.projectPath))
-            return false;
         if (serverUrl == null) {
             if (other.serverUrl != null)
                 return false;
         } else if (!serverUrl.equals(other.serverUrl))
-            return false;
-        if (workfolder == null) {
-            if (other.workfolder != null)
-                return false;
-        } else if (!workfolder.equals(other.workfolder))
             return false;
         if (workspaceExists != other.workspaceExists)
             return false;
@@ -112,6 +94,20 @@ public class WorkspaceConfiguration extends InvisibleAction implements Serializa
                 return false;
         } else if (!workspaceName.equals(other.workspaceName))
             return false;
+        if (projects == null) {
+            if (other.projects != null)
+                return false;
+        } else {
+            if ((other.projects == null) || (projects.length != other.projects.length))
+                return false;
+
+            for (int ndx = 0; ndx < projects.length; ++ndx) {
+                if (!projects[ndx].getProjectPath().equals(other.projects[ndx].getProjectPath()) ||
+                        !projects[ndx].getLocalPath().equals(other.projects[ndx].getLocalPath())) {
+                    return false;
+                }
+            }
+        }
         if (cloakedPaths == null) {
             if (other.cloakedPaths != null)
                 return false;
@@ -126,7 +122,7 @@ public class WorkspaceConfiguration extends InvisibleAction implements Serializa
 
     @Override
     public String toString() {
-        return String.format("WorkspaceConfiguration [projectPath=%s, serverUrl=%s, workfolder=%s, workspaceExists=%s, workspaceName=%s]", 
-                projectPath, serverUrl, workfolder, workspaceExists, workspaceName);
-    }    
+        return String.format("WorkspaceConfiguration [projectPath=%s, serverUrl=%s, workfolder=%s, workspaceExists=%s, workspaceName=%s]",
+                projects[0].projectPath, serverUrl, projects[0].getLocalPath(), workspaceExists, workspaceName);
+    }
 }

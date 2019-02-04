@@ -13,7 +13,7 @@ import java.util.Map;
 
 /**
  * Class that creates, deletes and gets workspaces from a TeamFoundationServer.
- * 
+ *
  * @author Erik Ramfelt
  */
 public class Workspaces implements ListWorkspacesCommand.WorkspaceFactory {
@@ -36,7 +36,7 @@ public class Workspaces implements ListWorkspacesCommand.WorkspaceFactory {
         final List<Workspace> result = server.execute(command.getCallable());
         return result;
     }
-    
+
     /**
      * Populate the map field with workspaces from the server once.
      */
@@ -48,7 +48,7 @@ public class Workspaces implements ListWorkspacesCommand.WorkspaceFactory {
             mapIsPopulatedFromServer = true;
         }
     }
-    
+
     /**
      * Returns the workspace with the specified name
      * @param workspaceName the name of the workspace name
@@ -99,13 +99,12 @@ public class Workspaces implements ListWorkspacesCommand.WorkspaceFactory {
     /**
      * Create workspace on server, map it and return a workspace object with the specified name
      * @param workspaceName the name of the new workspace
-     * @param serverPath the path in TFVC to map
+     * @param projects the paths in TFVC to map
      * @param cloakedPaths the paths in TFVC to exclude from mapping
-     * @param localPath the path in the local filesystem to map
      * @return a workspace
      */
-    public Workspace newWorkspace(final String workspaceName, final String serverPath, Collection<String> cloakedPaths, final String localPath) {
-        NewWorkspaceCommand command = new NewWorkspaceCommand(server, workspaceName, serverPath, cloakedPaths, localPath);
+    public Workspace newWorkspace(final String workspaceName, final ProjectData projects[], Collection<String> cloakedPaths) {
+        NewWorkspaceCommand command = new NewWorkspaceCommand(server, workspaceName, projects, cloakedPaths);
         server.execute(command.getCallable());
         Workspace workspace = new Workspace(workspaceName);
         workspaces.put(workspaceName, workspace);

@@ -25,6 +25,7 @@ import hudson.plugins.tfs.model.CredentialsConfigurer;
 import hudson.plugins.tfs.model.CredentialsConfigurerDescriptor;
 import hudson.plugins.tfs.model.ManualCredentialsConfigurer;
 import hudson.plugins.tfs.model.Project;
+import hudson.plugins.tfs.model.ProjectData;
 import hudson.plugins.tfs.model.Server;
 import hudson.plugins.tfs.model.WorkspaceConfiguration;
 import hudson.plugins.tfs.util.BuildVariableResolver;
@@ -57,10 +58,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import static hudson.Util.fixEmpty;
@@ -94,6 +96,8 @@ public class TeamFoundationServerScm extends SCM {
     private boolean useUpdate;
     private boolean useOverwrite;
     private String versionSpec;
+
+    private ProjectData[] projects = new ProjectData[0];
 
     private TeamFoundationServerRepositoryBrowser repositoryBrowser;
 
@@ -233,6 +237,35 @@ public class TeamFoundationServerScm extends SCM {
         this.cloakedPaths = splitCloakedPaths(cloakedPaths);
     }
 
+    /**
+     *
+     * @return a ProjectData object array with the all projects mapped in the workspace
+     */
+    public ProjectData[] getProjects() {
+        if (projects == null) {
+            projects = new ProjectData[0];
+        }
+        return projects;
+    }
+
+    /**
+     *
+     *@param projects projects mapped in the workspace
+     */
+    @DataBoundSetter
+    public void setProjects(final List<ProjectData> projects) {
+        if ((projects != null) && (projects.size() > 0)) {
+            for (Iterator<ProjectData> itr = projects.iterator(); itr.hasNext();) {
+                ProjectData ml = itr.next();
+                String path = Util.fixEmptyAndTrim(ml.projectPath);
+                if (path == null) {
+                    itr.remove();
+                }
+            }
+            this.projects = projects.toArray(new ProjectData[projects.size()]);
+        }
+    }
+
     // Bean properties END
 
     static String serializeCloakedPathCollectionToString(final Collection<String> cloakedPaths) {
@@ -311,8 +344,12 @@ public class TeamFoundationServerScm extends SCM {
     @Override
     public void checkout(final Run<?, ?> build, final Launcher launcher, final FilePath workspaceFilePath, final TaskListener listener, final File changelogFile, final SCMRevisionState baseline) throws IOException, InterruptedException {
         Server server = createServer(launcher, listener, build);
+        projects = ProjectData.getProjects(build, getProjectPath(), getLocalPath(), getProjects());
+        for (ProjectData tempProject : projects) {
+            tempProject.setLocalPath(workspaceFilePath.child(tempProject.getLocalPath()).getRemote());
+        }
         try {
-            WorkspaceConfiguration workspaceConfiguration = new WorkspaceConfiguration(server.getUrl(), getWorkspaceName(build, workspaceFilePath.toComputer()), getProjectPath(build), getCloakedPaths(build), getLocalPath());
+            WorkspaceConfiguration workspaceConfiguration = new WorkspaceConfiguration(server.getUrl(), getWorkspaceName(build, workspaceFilePath.toComputer()), projects, getCloakedPaths(build));
             final Run<?, ?> previousBuild = build.getPreviousBuild();
             // Check if the configuration has changed
             if (previousBuild != null) {
@@ -338,11 +375,11 @@ public class TeamFoundationServerScm extends SCM {
                 singleVersionSpec = buildVariableResolver.resolve(VERSION_SPEC);
             }
 
-            final String projPath = workspaceConfiguration.getProjectPath();
+            final String projPath = workspaceConfiguration.getProjects()[0].getProjectPath();
             final Project project = server.getProject(projPath);
             final int changeSet = recordWorkspaceChangesetVersion(build, listener, project, projPath, singleVersionSpec);
 
-            CheckoutAction action = new CheckoutAction(workspaceConfiguration.getWorkspaceName(), workspaceConfiguration.getProjectPath(), workspaceConfiguration.getCloakedPaths(), workspaceConfiguration.getWorkfolder(), isUseUpdate(), isUseOverwrite());
+            CheckoutAction action = new CheckoutAction(workspaceConfiguration.getWorkspaceName(), workspaceConfiguration.getProjects(), workspaceConfiguration.getCloakedPaths(), isUseUpdate(), isUseOverwrite());
             List<ChangeSet> list;
             if (StringUtils.isNotEmpty(singleVersionSpec)) {
                 list = action.checkoutBySingleVersionSpec(server, workspaceFilePath, singleVersionSpec);
@@ -727,21 +764,41 @@ public class TeamFoundationServerScm extends SCM {
             // There's no PollingResult.INCOMPARABLE, so we use the next closest thing
             return PollingResult.BUILD_NOW;
         }
-        final Project tfsProject = server.getProject(projectPath);
+        //        final Project tfsProject = server.getProject(projectPaths);
+        Collection<Project> tfsProjects = new ArrayList<Project>();
+        TFSRevisionState tfsRemote = null;
+        Change change = null;
+        for (ProjectData projectData : ProjectData.getProjects(build, getProjectPath(), getLocalPath(), getProjects())) {
+            tfsProjects.add(server.getProject(projectData.getProjectPath()));
+        }
         try {
-            final ChangeSet latest = tfsProject.getLatestUncloakedChangeset(tfsBaseline.changesetVersion, cloakedPaths);
-            final TFSRevisionState tfsRemote =
-                    (latest != null)
-                    ? new TFSRevisionState(latest.getVersion(), projectPath)
-                    : tfsBaseline;
+            for (Project tfsProject : tfsProjects) {
+                final ChangeSet latest = tfsProject.getLatestUncloakedChangeset(tfsBaseline.changesetVersion, cloakedPaths);
+                if (latest != null) {
+                    tfsRemote =
+                            new TFSRevisionState(latest.getVersion(), tfsProject.getProjectPath());
+                } else {
+                    tfsRemote =
+                            tfsBaseline;
+                }
 
-            // TODO: we could return INSIGNIFICANT if all the changesets
-            // contain the string "***NO_CI***" at the end of their comment
-            final Change change =
-                    tfsBaseline.changesetVersion == tfsRemote.changesetVersion
-                    ? Change.NONE
-                    : Change.SIGNIFICANT;
-            return new PollingResult(tfsBaseline, tfsRemote, change);
+                // TODO: we could return INSIGNIFICANT if all the changesets
+                // contain the string "***NO_CI***" at the end of their comment
+                //final Change change =
+                //        tfsBaseline.changesetVersion == tfsRemote.changesetVersion
+                //        ? Change.NONE
+                //        : Change.SIGNIFICANT;
+                //return new PollingResult(tfsBaseline, tfsRemote, change);
+                if (tfsBaseline.changesetVersion == tfsRemote.changesetVersion) {
+                    return PollingResult.NO_CHANGES;
+                } else if (latest != null && (latest.getComment().contains("***NO_CI***"))) {
+                    return PollingResult.NO_CHANGES;
+                } else {
+                    change = Change.SIGNIFICANT;
+                    return new PollingResult(tfsBaseline, tfsRemote, change);
+                }
+            }
+            return PollingResult.NO_CHANGES;
         } catch (final Exception e) {
             e.printStackTrace(listener.fatalError(e.getMessage()));
             return PollingResult.NO_CHANGES;
